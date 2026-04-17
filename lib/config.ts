@@ -15,7 +15,7 @@ export const SUBGROUPS: Subgroup[] = [
     id: 'container',
     name: 'Container 소모임',
     channelId: 'GE94HAW4V',
-    contactId: 'mosesyoon',
+    contactId: 'heuri',
   },
   {
     id: 'kiro',
