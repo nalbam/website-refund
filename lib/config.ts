@@ -30,6 +30,12 @@ export const SUBGROUPS: Subgroup[] = [
     contactId: 'hanjin',
   },
   {
+    id: 'devops',
+    name: 'DevOps 소모임',
+    channelId: 'CMQ7MHESE',
+    contactId: 'froguin3',
+  },
+  {
     id: 'sandbox',
     name: 'Sandbox 소모임',
     channelId: 'C07HZRYBNRG',
