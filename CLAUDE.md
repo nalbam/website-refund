@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## 프로젝트 개요
 
-AWSKRUG 환불 신청 시스템 - AWSKRUG 밋업 참가자들이 참가비 환불을 신청할 수 있는 Next.js 웹 애플리케이션입니다. 사용자가 환불 신청 정보를 입력하면 선택한 소모임의 Slack 채널로 알림이 전송됩니다.
+AWSKRUG 환불 신청 시스템 - AWSKRUG 밋업 참가자들이 참가비 환불을 신청할 수 있는 Next.js 웹 애플리케이션입니다. 사용자가 환불 신청 정보를 입력하면 선택한 소모임의 Slack 채널로 알림이 전송됩니다. 담당자가 Slack 메시지에 `:refund-done:` 리액션을 달면 `/api/slack/events` 웹훅이 원본 메시지를 갱신하여 처리 완료 상태를 기록합니다.
 
 ## 개발 명령어
 
@@ -38,14 +38,17 @@ npm run lint
 ```
 app/
   api/
-    refund/route.ts       # 환불 신청 제출 POST 엔드포인트
-    subgroups/route.ts    # 사용 가능한 소모임 조회 GET 엔드포인트
-  page.tsx                # 메인 환불 신청 폼 페이지 (클라이언트 컴포넌트)
-  layout.tsx              # 루트 레이아웃
-  globals.css             # 글로벌 스타일
+    refund/route.ts           # 환불 신청 제출 POST 엔드포인트
+    subgroups/route.ts        # 사용 가능한 소모임 조회 GET 엔드포인트
+    slack/events/route.ts     # Slack 이벤트 수신 (reaction_added: refund-done)
+  page.tsx                    # 메인 환불 신청 폼 페이지 (클라이언트 컴포넌트)
+  layout.tsx                  # 루트 레이아웃
+  globals.css                 # 글로벌 스타일
 lib/
-  config.ts               # 전역 설정 (SUBGROUPS, getSlackBotToken, validateConfig)
-  utils.ts                # 공유 유틸리티 함수 (Subgroup 타입, parseSubgroups, sanitizeForSlack)
+  config.ts                   # 전역 설정 (SUBGROUPS 상수, getSubgroups, getSlackBotToken, getSlackSigningSecret)
+  utils.ts                    # 공유 유틸리티 (Subgroup 타입, sanitizeForSlack)
+  slack-signature.ts          # Slack 요청 서명 검증 (HMAC-SHA256, 5분 skew)
+  refund-done.ts              # :refund-done: 리액션 처리 (계좌 마스킹 + 환불일시 + 처리자 기록)
 ```
 
 ### 데이터 흐름
@@ -58,14 +61,23 @@ lib/
    - 폼 제출 시 `/api/refund`로 POST 요청
 
 2. **백엔드 API 라우트**:
-   - `/api/subgroups`: 전역 설정(`lib/config.ts`)에서 소모임 목록 반환
+   - `/api/subgroups`: `getSubgroups()`로 소모임 목록 반환
    - `/api/refund`: 요청 유효성 검증 후 해당 채널로 포맷팅된 Slack 메시지 전송
-   - `SUBGROUPS` 상수와 `getSlackBotToken()` 함수 사용
+   - `getSubgroups()`와 `getSlackBotToken()` 함수 사용 (상수 직접 참조 금지)
+   - Slack API 실패 시 코드별 매핑: `not_in_channel`/`channel_not_found`/`is_archived` → 409
 
 3. **Slack 연동**:
    - Slack Block Kit을 사용한 풍부한 메시지 포맷팅
    - 메시지 포함 정보: 소모임, 신청자 이름, 은행이름, 계좌번호, 신청일시, 메모(선택)
-   - `chat:write` 봇 권한 필요
+   - Bot 권한: `chat:write`, `channels:history`, `groups:history`, `reactions:read`
+
+4. **환불 처리 (Slack 리액션)**:
+   - Event Subscriptions Request URL: `https://<domain>/api/slack/events`
+   - Subscribed bot event: `reaction_added`
+   - `app/api/slack/events/route.ts`는 서명 검증 후 `reaction === 'refund-done'`인 메시지 리액션만 `processRefundDone`으로 전달
+   - `lib/refund-done.ts`가 `conversations.history` + `chat.update`로 메시지 갱신:
+     계좌번호 마스킹, `*환불일시:*` 추가, header 🔔→✅, context를 처리자 표시로 교체
+     fallback text는 `환불 신청이 처리되었습니다.`로 고정
 
 ## 환경 변수 설정
 
@@ -74,40 +86,17 @@ lib/
 ```env
 # Slack Bot Token (xoxb-...)
 SLACK_BOT_TOKEN=xoxb-your-token-here
+
+# Slack Signing Secret (reaction_added 서명 검증)
+SLACK_SIGNING_SECRET=your-signing-secret-here
+
+# (선택) SUBGROUPS 상수를 덮어쓰는 환경 변수. 지정 시 우선 사용, 미설정 시 상수로 폴백.
+# SUBGROUPS_JSON=[{"id":"aiengineering","name":"AI Engineering 소모임","channelId":"C07...","contactId":"nalbam"}]
 ```
 
 ## 소모임 설정 (Constants Configuration)
 
-소모임 정보는 `lib/config.ts` 파일에 상수로 정의되어 있습니다:
-
-```typescript
-export const SUBGROUPS: Subgroup[] = [
-  {
-    id: 'aiengineering',
-    name: 'AI Engineering 소모임',
-    channelId: 'C07JVMT255E',
-    contactId: 'nalbam',
-  },
-  {
-    id: 'container',
-    name: 'Container 소모임',
-    channelId: 'GE94HAW4V',
-    contactId: 'mosesyoon',
-  },
-  {
-    id: 'kiro',
-    name: 'Kiro 소모임',
-    channelId: 'C0A4R4LLEBH',
-    contactId: 'yanso',
-  },
-  {
-    id: 'sandbox',
-    name: 'Sandbox 소모임',
-    channelId: 'C07HZRYBNRG',
-    contactId: 'nalbam',
-  },
-];
-```
+소모임 목록은 `lib/config.ts`의 `SUBGROUPS` 상수에 정의되어 있습니다 (현재 `aiengineering`, `container`, `kiro`, `platform`, `devops`, `sandbox`). 새 항목 추가 시 `lib/config.ts`를 직접 편집하거나 `SUBGROUPS_JSON` 환경 변수를 사용하세요.
 
 **Subgroup 인터페이스** (`lib/utils.ts`):
 ```typescript
@@ -121,24 +110,32 @@ export interface Subgroup {
 
 ### 전역 설정 사용 방법
 
-API 라우트 및 서버 컴포넌트에서 전역 설정을 임포트하여 사용:
+API 라우트 및 서버 컴포넌트는 **반드시 `getSubgroups()`를 사용**해야 합니다. `SUBGROUPS` 상수는 fallback 기본값일 뿐이며 런타임에 환경 변수로 덮어쓸 수 있습니다:
 
 ```typescript
-import { SUBGROUPS, getSlackBotToken } from '@/lib/config';
+import { getSubgroups, getSlackBotToken } from '@/lib/config';
 
-// Slack 토큰은 런타임에 함수 호출로 가져옴
+const subgroups = getSubgroups();  // SUBGROUPS_JSON env 우선, 없으면 SUBGROUPS 상수
 const slackToken = getSlackBotToken();
 ```
 
-**장점**:
-- 환경 변수 파싱 불필요, 타입 안정성 보장
-- 설정이 코드에 명시되어 관리 용이
-- API 라우트 코드 간소화
-- Git으로 버전 관리 가능
+### 소모임 설정 우선순위
 
-**주의사항**:
-- 소모임 추가/수정 시 `lib/config.ts` 파일 수정 필요
-- 채널 ID는 민감 정보가 아니므로 코드에 포함 가능
+`getSubgroups()`는 다음 순서로 해석합니다:
+
+1. `SUBGROUPS_JSON` 환경 변수가 있고 JSON 배열로 파싱 가능하며 유효 항목이 1개 이상이면 **그 값 사용**
+2. 위 조건을 만족하지 않으면 `lib/config.ts`의 `SUBGROUPS` 상수로 폴백 (경고 로그 출력)
+
+`SUBGROUPS_JSON` 포맷:
+```json
+[{"id":"aiengineering","name":"AI Engineering 소모임","channelId":"C07...","contactId":"nalbam"}]
+```
+- 필수 필드: `id`, `name`, `channelId`
+- 선택 필드: `contactId`
+
+**운영 가이드**:
+- **공개 레포 + 민감 채널 ID**: `SUBGROUPS_JSON`을 Amplify Console 등 배포 환경 변수에 설정하고 `SUBGROUPS` 상수는 예시 값으로 남겨두기
+- **로컬 개발/폐쇄 레포**: 상수만으로 충분, `SUBGROUPS_JSON` 미설정
 - `lib/config.ts`는 서버 컴포넌트/API 라우트에서만 사용 (클라이언트에서 임포트 금지)
 
 ## 주요 패턴 및 규칙
@@ -172,37 +169,41 @@ const slackToken = getSlackBotToken();
 - API 라우트는 구조화된 에러 응답 반환: `{ error: string }`
 - 서버 측 에러는 콘솔 로깅
 - 프론트엔드에서 사용자 친화적인 한국어 에러 메시지 표시
-- 모든 API 에러는 적절한 HTTP 상태 코드 포함 (400, 500)
+- HTTP 상태 코드:
+  - `/api/refund`: 400 (검증 실패), 409 (`not_in_channel`/`channel_not_found`/`is_archived`), 500 (설정 누락·기타)
+  - `/api/slack/events`: 400 (JSON 파싱 실패), 401 (서명 검증 실패), 500 (`SLACK_SIGNING_SECRET` 미설정)
+  - `/api/subgroups`: 500 (소모임 로드 실패)
 
 ## Slack 설정 체크리스트
 
 새로운 Slack 연동 설정 시:
 1. Slack App 생성 및 Bot User 추가
-2. `chat:write` OAuth 스코프 추가
-3. 워크스페이스에 앱 설치
-4. 대상 채널에 봇 초대
-5. Bot Token (xoxb-...)을 `.env` 파일의 `SLACK_BOT_TOKEN`에 설정
+2. OAuth 스코프 추가: `chat:write`, `channels:history`, `groups:history`, `reactions:read`
+3. Event Subscriptions 활성화
+   - Request URL: `https://<your-domain>/api/slack/events`
+   - Subscribe to bot events: `reaction_added`
+4. 워크스페이스에 앱 설치
+5. 대상 채널에 봇 초대
+6. Bot Token(`xoxb-...`)을 `SLACK_BOT_TOKEN`에, Signing Secret을 `SLACK_SIGNING_SECRET`에 설정
+
 
 ## 새 소모임 추가하기
 
-`lib/config.ts` 파일의 `SUBGROUPS` 배열에 새 항목 추가:
+`lib/config.ts`의 `SUBGROUPS` 배열에 다음 형태로 항목 추가:
 
 ```typescript
-export const SUBGROUPS: Subgroup[] = [
-  // 기존 소모임들...
-  {
-    id: 'new-subgroup',           // 고유 ID (URL 친화적)
-    name: '새 소모임',             // 화면에 표시될 이름
-    channelId: 'C12345678',       // Slack 채널 ID
-    contactId: 'slack-username',  // 담당자 Slack ID (선택)
-  },
-];
+{
+  id: 'new-subgroup',           // 고유 ID (URL 친화적)
+  name: '새 소모임',             // 화면에 표시될 이름
+  channelId: 'C12345678',       // Slack 채널 ID
+  contactId: 'slack-username',  // 담당자 Slack ID (선택)
+}
 ```
 
 **절차**:
 1. Slack 채널 생성 및 채널 ID 확인
 2. 채널에 봇 초대
-3. `lib/config.ts` 파일 수정
+3. `lib/config.ts` 파일 수정 (또는 배포 환경의 `SUBGROUPS_JSON` 갱신)
 4. 변경사항 커밋 및 배포
 
 ## URL 파라미터
@@ -210,13 +211,10 @@ export const SUBGROUPS: Subgroup[] = [
 소모임을 미리 선택한 상태로 페이지 접근 가능:
 
 ```
-https://refund.awskr.org/?subgroup=aiengineering
-https://refund.awskr.org/?subgroup=container
-https://refund.awskr.org/?subgroup=kiro
-https://refund.awskr.org/?subgroup=sandbox
+https://refund.awskr.org/?subgroup=<id>
 ```
 
-- `subgroup` 파라미터에 소모임 ID를 지정하면 해당 소모임이 자동 선택됨
+- `subgroup` 파라미터에 `SUBGROUPS`의 `id`(`aiengineering`, `container`, `kiro`, `platform`, `devops`, `sandbox` 등)를 지정하면 해당 소모임이 자동 선택됨
 - 유효하지 않은 ID는 무시되고 사용자가 직접 선택해야 함
 
 ## 코드 스타일 규칙
