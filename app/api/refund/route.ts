@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { WebClient } from '@slack/web-api';
 import { sanitizeForSlack } from '@/lib/utils';
-import { getSlackBotToken, SUBGROUPS } from '@/lib/config';
+import { getSlackBotToken, getSubgroups } from '@/lib/config';
 
 interface RefundRequest {
   subgroup: string;
@@ -46,14 +46,15 @@ export async function POST(request: Request) {
     }
 
     // Validate subgroups configuration
-    if (SUBGROUPS.length === 0) {
+    const subgroups = getSubgroups();
+    if (subgroups.length === 0) {
       return NextResponse.json(
         { error: 'No valid subgroups configured' },
         { status: 500 }
       );
     }
 
-    const selectedSubgroup = SUBGROUPS.find(s => s.id === subgroup);
+    const selectedSubgroup = subgroups.find(s => s.id === subgroup);
     if (!selectedSubgroup) {
       return NextResponse.json(
         { error: 'Invalid subgroup selected' },

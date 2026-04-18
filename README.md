@@ -83,6 +83,22 @@ npm start
 
 ## 소모임 설정
 
+소모임 정보는 두 가지 방법으로 설정할 수 있으며, **환경 변수가 있으면 그것을 우선 사용하고 없으면 코드 상수로 폴백**합니다.
+
+### 1. 환경 변수 (배포 환경에서 권장)
+
+채널 ID나 담당자를 공개 레포에 노출하고 싶지 않을 때 사용합니다. `SUBGROUPS_JSON`에 JSON 배열을 한 줄로 지정:
+
+```env
+SUBGROUPS_JSON=[{"id":"aiengineering","name":"AI Engineering 소모임","channelId":"C07...","contactId":"nalbam"}]
+```
+
+- 필수 필드: `id`, `name`, `channelId`
+- 선택 필드: `contactId`
+- 파싱 실패 또는 유효 항목이 0개면 자동으로 상수로 폴백하고 경고 로그를 남깁니다.
+
+### 2. 코드 상수 (로컬 개발/기본값)
+
 소모임 정보는 `lib/config.ts` 파일의 `SUBGROUPS` 상수 배열에 정의되어 있습니다.
 
 새로운 소모임을 추가하려면 `lib/config.ts` 파일을 수정하세요:

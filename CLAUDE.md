@@ -88,6 +88,9 @@ SLACK_BOT_TOKEN=xoxb-your-token-here
 
 # Slack Signing Secret (reaction_added 서명 검증)
 SLACK_SIGNING_SECRET=your-signing-secret-here
+
+# (선택) SUBGROUPS 상수를 덮어쓰는 환경 변수. 지정 시 우선 사용, 미설정 시 상수로 폴백.
+# SUBGROUPS_JSON=[{"id":"aiengineering","name":"AI Engineering 소모임","channelId":"C07...","contactId":"nalbam"}]
 ```
 
 ## 소모임 설정 (Constants Configuration)
@@ -135,24 +138,32 @@ export interface Subgroup {
 
 ### 전역 설정 사용 방법
 
-API 라우트 및 서버 컴포넌트에서 전역 설정을 임포트하여 사용:
+API 라우트 및 서버 컴포넌트는 **반드시 `getSubgroups()`를 사용**해야 합니다. `SUBGROUPS` 상수는 fallback 기본값일 뿐이며 런타임에 환경 변수로 덮어쓸 수 있습니다:
 
 ```typescript
-import { SUBGROUPS, getSlackBotToken } from '@/lib/config';
+import { getSubgroups, getSlackBotToken } from '@/lib/config';
 
-// Slack 토큰은 런타임에 함수 호출로 가져옴
+const subgroups = getSubgroups();  // SUBGROUPS_JSON env 우선, 없으면 SUBGROUPS 상수
 const slackToken = getSlackBotToken();
 ```
 
-**장점**:
-- 환경 변수 파싱 불필요, 타입 안정성 보장
-- 설정이 코드에 명시되어 관리 용이
-- API 라우트 코드 간소화
-- Git으로 버전 관리 가능
+### 소모임 설정 우선순위
 
-**주의사항**:
-- 소모임 추가/수정 시 `lib/config.ts` 파일 수정 필요
-- 채널 ID는 민감 정보가 아니므로 코드에 포함 가능
+`getSubgroups()`는 다음 순서로 해석합니다:
+
+1. `SUBGROUPS_JSON` 환경 변수가 있고 JSON 배열로 파싱 가능하며 유효 항목이 1개 이상이면 **그 값 사용**
+2. 위 조건을 만족하지 않으면 `lib/config.ts`의 `SUBGROUPS` 상수로 폴백 (경고 로그 출력)
+
+`SUBGROUPS_JSON` 포맷:
+```json
+[{"id":"aiengineering","name":"AI Engineering 소모임","channelId":"C07...","contactId":"nalbam"}]
+```
+- 필수 필드: `id`, `name`, `channelId`
+- 선택 필드: `contactId`
+
+**운영 가이드**:
+- **공개 레포 + 민감 채널 ID**: `SUBGROUPS_JSON`을 Amplify Console 등 배포 환경 변수에 설정하고 `SUBGROUPS` 상수는 예시 값으로 남겨두기
+- **로컬 개발/폐쇄 레포**: 상수만으로 충분, `SUBGROUPS_JSON` 미설정
 - `lib/config.ts`는 서버 컴포넌트/API 라우트에서만 사용 (클라이언트에서 임포트 금지)
 
 ## 주요 패턴 및 규칙
