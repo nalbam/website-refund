@@ -2,6 +2,8 @@
 
 AWSKRUG 밋업 참가자들이 참가비 환불을 신청할 수 있는 웹 애플리케이션입니다.
 
+![Refund Bot](images/refund-bot.png)
+
 ## 기능
 
 - 소모임 선택 (URL 파라미터로 사전 선택 가능)
