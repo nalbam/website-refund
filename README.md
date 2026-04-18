@@ -108,16 +108,10 @@ SUBGROUPS_JSON=[{"id":"aiengineering","name":"AI Engineering 소모임","channel
 ```typescript
 export const SUBGROUPS: Subgroup[] = [
   {
-    id: 'aiengineering',
-    name: 'AI Engineering 소모임',
-    channelId: 'C07JVMT255E',
-    contactId: 'nalbam',        // 담당자 Slack ID (선택)
-  },
-  {
     id: 'sandbox',
     name: 'Sandbox 소모임',
     channelId: 'C07HZRYBNRG',
-    contactId: 'nalbam',
+    contactId: 'nalbam',        // 담당자 Slack ID (선택)
   },
   // 새 소모임 추가...
 ];

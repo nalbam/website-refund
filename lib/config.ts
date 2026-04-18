@@ -6,36 +6,6 @@ import type { Subgroup } from './utils';
  */
 export const SUBGROUPS: Subgroup[] = [
   {
-    id: 'aiengineering',
-    name: 'AI Engineering 소모임',
-    channelId: 'C07JVMT255E',
-    contactId: 'nalbam',
-  },
-  {
-    id: 'container',
-    name: 'Container 소모임',
-    channelId: 'GE94HAW4V',
-    contactId: 'heuri',
-  },
-  {
-    id: 'kiro',
-    name: 'Kiro 소모임',
-    channelId: 'C0A4R4LLEBH',
-    contactId: 'yanso',
-  },
-  {
-    id: 'platform',
-    name: 'Platform Engineering 소모임',
-    channelId: 'C066G367R3R',
-    contactId: 'hanjin',
-  },
-  {
-    id: 'devops',
-    name: 'DevOps 소모임',
-    channelId: 'CMQ7MHESE',
-    contactId: 'froguin3',
-  },
-  {
     id: 'sandbox',
     name: 'Sandbox 소모임',
     channelId: 'C07HZRYBNRG',
