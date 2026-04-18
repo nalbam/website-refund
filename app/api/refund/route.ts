@@ -160,10 +160,41 @@ export async function POST(request: Request) {
     });
 
   } catch (error) {
+    const slackError = extractSlackErrorCode(error);
+    if (slackError === 'not_in_channel') {
+      return NextResponse.json(
+        {
+          error:
+            '봇이 해당 소모임 채널에 초대되어 있지 않습니다. Slack 채널에서 `/invite @RefundBot` 명령어로 봇을 초대한 뒤 다시 시도해주세요.',
+        },
+        { status: 409 }
+      );
+    }
+    if (slackError === 'channel_not_found') {
+      return NextResponse.json(
+        { error: '환불 알림 대상 채널을 찾을 수 없습니다. 운영진에게 문의해주세요.' },
+        { status: 409 }
+      );
+    }
+    if (slackError === 'is_archived') {
+      return NextResponse.json(
+        { error: '환불 알림 대상 채널이 보관 처리되어 있어 메시지를 보낼 수 없습니다. 운영진에게 문의해주세요.' },
+        { status: 409 }
+      );
+    }
+
     console.error('Error processing refund request:', error);
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }
     );
   }
+}
+
+function extractSlackErrorCode(error: unknown): string | null {
+  if (typeof error !== 'object' || error === null) return null;
+  const data = (error as { data?: unknown }).data;
+  if (typeof data !== 'object' || data === null) return null;
+  const code = (data as { error?: unknown }).error;
+  return typeof code === 'string' ? code : null;
 }
