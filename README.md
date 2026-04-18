@@ -144,6 +144,8 @@ export const SUBGROUPS: Subgroup[] = [
 | AI Engineering | `?subgroup=aiengineering` |
 | Container | `?subgroup=container` |
 | Kiro | `?subgroup=kiro` |
+| Platform Engineering | `?subgroup=platform` |
+| DevOps | `?subgroup=devops` |
 | Sandbox | `?subgroup=sandbox` |
 
 ## 라이선스
